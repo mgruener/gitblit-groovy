@@ -9,6 +9,23 @@
  *  - json (puppet module metadata) syntax checks
  *
  *  inspired by https://github.com/drwahl/puppet-git-hooks/
+ *
+ *  gitblit.properties:
+ *    # the checks to perform
+ *    #   validate -> puppet parser validate
+ *    #   lint     -> puppet-lint
+ *    #   erb      -> erb syntax check
+ *    #   yaml     -> yaml syntax check
+ *    #   json     -> json syntax check
+ *    puppetchecks.checks = validate lint erb yaml json
+ *    # the puppet-lint options to use
+ *    # see puppet-lint --help for details
+ *    puppetchecks.lintoptions = --fail-on-warnings --no-autoloader_layout-check --no-80chars-check
+ *
+ *    groovy.customFields = "puppetchecks=Puppet checks (overrides puppetchecks.checks)" "puppetcheckslintoptions=Puppet Lint Options (overrides puppetchecks.lintoptions)"
+ *
+ *    
+ *
  */
 
 
@@ -73,6 +90,20 @@ try {
 	rubyAvailable = 1
 } catch (IOException e) {
 	logger.warn("puppet-checks: ruby not found, skipping yaml / json syntax checks")
+}
+
+def checksToPerform = gitblit.getString('puppetchecks.checks','validate lint erb yaml json').tokenize()
+def lintOptions = gitblit.getString('puppetchecks.lintoptions','--fail-on-warnings --no-autoloader_layout-check --no-80chars-check').tokenize()
+
+def repoChecksToPerform = repository.customFields.puppetchecks.tokenize()
+def repoLintOptions = repository.customFields.puppetcheckslintoptions.tokenize()
+
+if (repoChecksToPerform) {
+	checksToPerform = repoChecksToPerform
+}
+
+if (repoLintOptions) {
+	lintOptions = repoLintOptions
 }
 
 def blocked = false
@@ -145,31 +176,39 @@ for(command in commands) {
 			switch (fileext.toLowerCase()) {
 				case 'pp':
 					if (puppetAvailable) {
-						def msg = "puppet-checks: puppet syntax check on file ${it}"
-						logger.debug(msg)
-						clientLogger.info(msg)
-						//def puppet = ["puppet", "parser", "validate", "--color=false", it].execute()
-						def puppet = ["puppet", "parser", "validate", "--color=false", "${tempdir.absolutePath}/${it}"].execute()
-						puppet.waitFor()
-						if (puppet.exitValue()) {
+						def puppet
+						if (checksToPerform.contains('validate')) {
+							def msg = "puppet-checks: puppet syntax check on file ${it}"
+							logger.debug(msg)
+							clientLogger.info(msg)
+							puppet = ["puppet", "parser", "validate", "--color=false", "${tempdir.absolutePath}/${it}"].execute()
+							puppet.waitFor()
+						}
+						if (checksToPerform.contains('validate') && puppet.exitValue()) {
 							msg = "puppet-checks: puppet syntax errors in file ${it}"
 							logger.debug(msg)
 							clientLogger.error(msg + "\n" + puppet.err.text)
 							blocked = true
 						} else {
 							// only perform puppet-lint checks when the syntax check succeeds
+							// (or when puppet validation has been deactivated)
 							// puppet-lint would only repeat possible syntax problems
-							if (puppetlintAvailable) {
-								msg = "puppet-checks: puppet code style check on file ${it}"
+							if (puppetlintAvailable && checksToPerform.contains('lint')) {
+								def msg = "puppet-checks: puppet code style check on file ${it}"
 								logger.debug(msg)
 								clientLogger.info(msg)
-								def puppetlint = ["puppet-lint", "--fail-on-warnings","--no-autoloader_layout-check","${tempdir.absolutePath}/${it}"].execute()
+								def lintCommand = ["puppet-lint"]
+								lintCommand += lintOptions
+								lintCommand << "${tempdir.absolutePath}/${it}"
+								def puppetlint = lintCommand.execute()
 								puppetlint.waitFor()
 								if (puppetlint.exitValue()) {
 									msg = "puppet-checks: puppet code style errors file ${it}"
 									logger.debug(msg)
-									clientLogger.error(msg + "\n" + puppetlint.err.text)
+									clientLogger.error(msg + "\n" + puppetlint.in.text)
 									blocked = true
+								} else {
+									clientLogger.info(puppetlint.in.text)
 								}
 							}
 						}
@@ -177,7 +216,7 @@ for(command in commands) {
 					
 					break
 				case 'erb':
-					if (erbAvailable && rubyAvailable) {
+					if (erbAvailable && rubyAvailable && checksToPerform.contains('erb')) {
 						def msg = "puppet-checks: template syntax checks on file ${it}"
 						logger.debug(msg)
 						clientLogger.info(msg)
@@ -194,7 +233,7 @@ for(command in commands) {
 					}
 					break
 				case ['yaml','yml']:
-					if (rubyAvailable) {
+					if (rubyAvailable && checksToPerform.contains('yaml')) {
 						def msg = "puppet-checks: yaml syntax checks on file ${it}"
 						logger.debug(msg)
 						clientLogger.info(msg)
@@ -209,7 +248,7 @@ for(command in commands) {
 					}
 					break
 				case ['json']:
-					if (rubyAvailable) {
+					if (rubyAvailable && checksToPerform.contains('json')) {
 						def msg = "puppet-checks: json syntax checks on file ${it}"
 						logger.debug(msg)
 						clientLogger.info(msg)
