@@ -220,7 +220,7 @@ for(command in commands) {
 						def msg = "puppet-checks: template syntax checks on file ${it}"
 						logger.debug(msg)
 						clientLogger.info(msg)
-						def erb = ["erb", "-P", "-x", "-T '-'", "${tempdir.absolutePath}/${it}"].execute()
+						def erb = ["erb", "-P", "-x", "-T", "-", "${tempdir.absolutePath}/${it}"].execute()
 						def ruby = ["ruby", "-c"].execute()
 						erb | ruby
 						ruby.waitFor()
