@@ -45,6 +45,11 @@ import com.gitblit.utils.JGitUtils
 import com.gitblit.utils.StringUtils
 import com.gitblit.utils.ClientLogger
 
+def indent (text) {
+  def doIndent = { it = "  !! " + it }
+  text.readLines().collect(doIndent).join('\n') 
+}
+
 logger.info("puppet-checks hook triggered by ${user.username} for ${repository.name}: checking ${commands.size} commands")
 
 // check which tools are available
@@ -105,6 +110,7 @@ if (repoChecksToPerform) {
 if (repoLintOptions) {
 	lintOptions = repoLintOptions
 }
+
 
 def blocked = false
 Repository r = gitblit.getRepository(repository.name)
@@ -187,7 +193,7 @@ for(command in commands) {
 						if (checksToPerform.contains('validate') && puppet.exitValue()) {
 							msg = "puppet-checks: puppet syntax errors in file ${it}"
 							logger.debug(msg)
-							clientLogger.error(msg + "\n" + puppet.err.text)
+							clientLogger.error(msg + "\n" + indent(puppet.err.text))
 							blocked = true
 						} else {
 							// only perform puppet-lint checks when the syntax check succeeds
@@ -205,10 +211,13 @@ for(command in commands) {
 								if (puppetlint.exitValue()) {
 									msg = "puppet-checks: puppet code style errors file ${it}"
 									logger.debug(msg)
-									clientLogger.error(msg + "\n" + puppetlint.in.text)
+									clientLogger.error(msg + "\n" + indent(puppetlint.in.text))
 									blocked = true
 								} else {
-									clientLogger.info(puppetlint.in.text)
+									msg = indent(puppetlint.in.text)
+									if (msg) {
+										clientLogger.info(msg)
+									}
 								}
 							}
 						}
@@ -227,7 +236,7 @@ for(command in commands) {
 						if (ruby.exitValue()) {
 							msg = "puppet-checks: template syntax errors file ${it}"
 							logger.debug(msg)
-							clientLogger.error(msg + "\n" + ruby.err.text)
+							clientLogger.error(msg + "\n" + indent(ruby.err.text))
 							blocked = true
 						}
 					}
@@ -242,7 +251,7 @@ for(command in commands) {
 						if (ruby.exitValue()) {
 							msg = "puppet-checks: yaml syntax errors file ${it}"
 							logger.debug(msg)
-							clientLogger.error(msg + "\n" + ruby.err.text)
+							clientLogger.error(msg + "\n" + indent(ruby.err.text))
 							blocked = true
 						}
 					}
@@ -257,7 +266,7 @@ for(command in commands) {
 						if (ruby.exitValue()) {
 							msg = "puppet-checks: json syntax errors file ${it}"
 							logger.debug(msg)
-							clientLogger.error(msg + "\n" + ruby.err.text)
+							clientLogger.error(msg + "\n" + indent(ruby.err.text))
 							blocked = true
 						}
 					}
