@@ -244,11 +244,8 @@ for(command in commands) {
 		// at the end of the script
 		logger.info("puppet-checks: cleaning up")
 		if (tempdir) {
-			if (tempdir.exists()) {
-				logger.debug("puppet-checks: deleting ${tempdir.absolutePath}")
-				tempdir.eachFileRecurse{ it.delete() }
-				tempdir.delete()
-			}
+			logger.debug("puppet-checks: deleting ${tempdir.absolutePath}")
+			tempdir.deleteDir()
 		}
 	}
 }
